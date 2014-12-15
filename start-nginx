@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+sed -i -e "s/\$PORT/${PORT:?}/g" .nginx/nginx.conf
+exec .nginx/nginx -p .
