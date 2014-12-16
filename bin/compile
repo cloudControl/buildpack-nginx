@@ -1,0 +1,63 @@
+#!/bin/bash
+set -eu
+
+readonly BP_DIR="$(dirname "$(dirname "$(readlink -f "$0")")")"
+
+readonly BUILD_DIR="$1"
+readonly CACHE_DIR="$2"
+
+readonly NGINX_VERSION="1.6.2"
+
+readonly NGINX_URL="http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz"
+readonly NGINX_SHA256="b5608c2959d3e7ad09b20fc8f9e5bd4bc87b3bc8ba5936a513c04ed8f1391a18"
+
+
+indent() {
+  sed -u 's/^/       /'
+}
+
+cd "$BUILD_DIR"
+
+cp --no-clobber "${BP_DIR}/nginx.conf" .nginx/
+
+# provide default settings if not customized
+if ! grep -q -s '^\s*root\b' .nginx/nginx.conf .nginx/conf.d/*.conf; then
+  mkdir -p ".nginx/conf.d"
+  cp "${BP_DIR}/default-root.conf" .nginx/conf.d
+fi
+
+cp "${BP_DIR}/start-nginx" .nginx/start
+
+if [[ ! -d "${CACHE_DIR}/nginx-${NGINX_VERSION}-installed" ]]; then
+  mkdir -p "${CACHE_DIR}"
+  pushd "${CACHE_DIR}" >/dev/null
+  find . -mindepth 1 -delete
+
+  echo "-----> Downloading nginx ..."
+  wget -q -P "${CACHE_DIR}" "${NGINX_URL}"
+  sha256sum --strict --quiet --check <(echo "${NGINX_SHA256}  ${CACHE_DIR}/nginx-${NGINX_VERSION}.tar.gz")
+  tar xf "${CACHE_DIR}/nginx-${NGINX_VERSION}.tar.gz" -C "${CACHE_DIR}"
+
+  pushd "nginx-${NGINX_VERSION}" >/dev/null
+  echo "-----> Building nginx ..."
+
+  readonly T="${CACHE_DIR}/nginx-${NGINX_VERSION}-installed"
+  ./configure --prefix="${T}" --sbin-path=.nginx/nginx --conf-path=.nginx/nginx.conf \
+    --{http,error}-log-path=.nginx/log \
+    --http-client-body-temp-path=.nginx/client_body_temp \
+    --http-proxy-temp-path=.nginx/proxy_temp \
+    --http-fastcgi-temp-path=.nginx/fastcgi_temp \
+    --http-uwsgi-temp-path=.nginx/uwsgi_temp \
+    --http-scgi-temp-path=.nginx/scgi_temp \
+    --pid-path=.nginx/pid --lock-path=.nginx/lock | indent
+  make | indent
+  make install | indent
+  popd >/dev/null
+  # remove example files
+  rm -r "${T}/html"
+  popd >/dev/null
+fi
+
+echo "-----> Installing nginx ..."
+
+cp -T --no-clobber -R "${CACHE_DIR}/nginx-${NGINX_VERSION}-installed/" .
