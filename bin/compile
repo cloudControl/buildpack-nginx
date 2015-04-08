@@ -18,11 +18,11 @@ indent() {
 
 cd "$BUILD_DIR"
 
+mkdir -p ".nginx/conf.d"
 cp --no-clobber "${BP_DIR}/nginx.conf" .nginx/
 
 # provide default settings if not customized
 if ! grep -q -s '^\s*root\b' .nginx/nginx.conf .nginx/conf.d/*.conf; then
-  mkdir -p ".nginx/conf.d"
   cp "${BP_DIR}/default-root.conf" .nginx/conf.d
 fi
 
